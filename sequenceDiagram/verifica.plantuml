@@ -9,13 +9,6 @@ participant "Autorità\nElettorale (AE)" as AE #a0d7cc
 participant "Osservatore\n(O)" as O #c9c2dd
 
 group Verifica individuale (elettore)
-
-E -> BP: Richiesta di verifica (fornisce la propria Ricevuta/i)
-note right of BP: La BP genera la Merkle Proof\nper la ricevuta specifica.
-
-BP -> E: Restituisce array [MerkleProof, MerkleRootFirmata]
-
-note over E: L'elettore calcola autonomamente la Merkle Root\ne verifica se coincide con quella firmata dalla BP.
     note right of E
         Input locale (da Fase 3):
         Identificativo 'i', Scheda 'B', Ricevuta 'R'

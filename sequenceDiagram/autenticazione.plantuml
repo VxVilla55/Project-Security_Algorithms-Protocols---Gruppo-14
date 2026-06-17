@@ -1,0 +1,42 @@
+@startuml
+
+hide footbox
+
+title Fase di Autenticazione
+participant "Elettore\n(E)" as E #e79088
+participant "Sistema di\nAutenticazione (SA)" as SA #9fbed3
+participant "IdP di Ateneo\n(Esterno al protocollo)" as IdP #fbd4b4
+
+E -> E: verifica Cert_SA con pk_CA
+
+group Autenticazione OIDC 
+E -> SA: richiesta di login
+SA -> IdP: redirect per autenticazione (OIDC)
+IdP --> E: form di login ateneo
+E -> IdP: inserisce credenziali
+IdP -> SA: conferma identità (ID Token)
+end
+
+SA -> SA: verifica diritto al voto 
+SA -> SA: verifica che E non abbia già ritirato una credenziale
+
+E -> E: genera coppia effimera (pk_v, sk_v)
+E -> SA: invia solo pk_v
+
+SA -> SA: firma RSA-PSS: σ_SA = Sign_sk_SA(pk_v)\ne registra di aver rilasciato credenziale per quell'identità
+SA -> E: Autenticazione accettata: σ_SA
+
+note right of E: credenziale di voto = (pk_v, σ_SA)\nsk_v resta segreta, servirà al voto
+
+group In caso di crash del client prima del voto:
+ E -> SA: invia la stessa pk_v di prima, salvata dal client
+
+alt E si presenta con la stessa pk_v
+    note over SA: SA vede che l'identità già servita si è ripresentata con la stessa pk_v \n -> manda la stessa firma di prima, salvata in locale
+    SA -> E: Autenticazione accettata: σ_SA
+ else [Else]: E si presenta con pk_v diversa
+    SA --> E: Autenticazione rifiutata
+
+end
+end
+@enduml

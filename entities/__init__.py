@@ -1,0 +1,6 @@
+from entities.CertificationAuthority import CertificationAuthority
+from entities.IdentityProvider import IdentityProvider
+from entities.SistemaAutenticazione import SistemaAutenticazione
+from entities.AutoritaElettorale import AutoritaElettorale
+from entities.Elettore import Elettore
+from entities.Osservatore import Osservatore

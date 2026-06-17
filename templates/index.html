@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spike Protocollo di E-Voto</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .cards { display:flex; gap:1.5rem; flex-wrap:wrap; margin-top:1.5rem; }
+    .card { background:#fff; border:1px solid var(--bordo); border-radius:12px; padding:1.3rem;
+            width:300px; text-decoration:none; color:inherit; box-shadow:0 2px 6px rgba(0,0,0,.05); }
+    .card:hover { transform:translateY(-3px); }
+    .card.admin h2 { color:var(--blu); } .card.utente h2 { color:var(--verde); }
+    .vstep { border-left:4px solid var(--bordo); padding:.5rem .8rem; margin:.5rem 0;
+             background:#fff; border-radius:6px; }
+    .vstep.ok { border-left-color:var(--verde); } .vstep.no { border-left-color:var(--rosso); }
+    ol { color:#43525f; line-height:1.6; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Spike — Protocollo di Voto Elettronico</h1>
+    <p class="muted">Implementazione didattica delle 5 fasi: Setup · Autenticazione · Voto · Scrutinio · Verifica</p>
+
+    <ol>
+      <li><b>Setup</b>: la CA certifica le chiavi (X.509), l'AE pubblica i parametri sulla Bacheca Pubblica.</li>
+      <li><b>Autenticazione</b>: l'elettore ottiene una credenziale pseudonima <code>(pk_v, σ_SA)</code>.</li>
+      <li><b>Voto</b>: cifratura ibrida AES-CBC + RSA-OAEP, firma <code>σ_v</code>, invio del pacchetto <code>M</code>.</li>
+      <li><b>Scrutinio</b>: a urne chiuse l'AE decifra, conta e pubblica esito + radice di Merkle.</li>
+      <li><b>Verifica</b>: individuale (l'elettore) e universale (chiunque, qui sotto).</li>
+    </ol>
+
+    <div class="cards">
+      <a class="card admin" href="/admin">
+        <h2>Dashboard</h2>
+        <p>Stato dei nodi (IdP, SA, AE), tabelle e blockchain. I controlli dell'elezione sono nella barra in alto.</p>
+      </a>
+      <a class="card utente" href="/utente">
+        <h2>Elettore</h2>
+        <p>Simula un singolo elettore passo-passo: chiavi, credenziale, cifratura, invio e verifica individuale.</p>
+      </a>
+    </div>
+
+    <div class="panel">
+      <h2>Verifica universale (chiunque, dai soli dati pubblici)</h2>
+      <p class="muted">Un osservatore esterno ricalcola l'esito usando solo la Bacheca Pubblica e la chiave
+         pubblica di firma dell'AE. Disponibile dopo lo scrutinio.</p>
+      <button class="blu" onclick="avviaUniversale()">Avvia verifica universale</button>
+      <button id="bnext" onclick="passoSuccessivo()" disabled>Passo successivo ▶</button>
+      <div id="verifica" style="margin-top:.8rem;"></div>
+    </div>
+  </div>
+
+  <script src="/static/common.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let passi = [], idx = 0, tuttoOk = null, totaliR = null, totaliP = null;
+
+    async function avviaUniversale() {
+      const d = await post("/api/universale", {});
+      if (d.errore) { $("verifica").innerHTML = '<span class="badge off">' + escapeHtml(d.errore) + '</span>'; $("bnext").disabled = true; return; }
+      passi = d.esito.passi; idx = 0; tuttoOk = d.esito.tutto_ok;
+      totaliR = d.esito.totali_ricalcolati; totaliP = d.esito.totali_pubblicati;
+      $("verifica").innerHTML = '<p class="muted">Premi “Passo successivo” per i ' + passi.length + ' controlli pubblici.</p>';
+      $("bnext").disabled = false;
+    }
+
+    function passoSuccessivo() {
+      if (idx >= passi.length) return;
+      const p = passi[idx];
+      const cls = p.esito ? "ok" : "no";
+      const badge = p.esito ? '<span class="badge on">OK</span>' : '<span class="badge off">NO</span>';
+      const div = document.createElement("div");
+      div.className = "vstep " + cls;
+      div.innerHTML = '<b>' + p.titolo + '</b> ' + badge + '<br><span class="muted">' + p.dettaglio + '</span>';
+      $("verifica").appendChild(div);
+      idx++;
+
+      if (idx >= passi.length) {
+        $("bnext").disabled = true;
+        const finale = tuttoOk
+          ? '<span class="badge on">ESITO CONFERMATO</span>'
+          : '<span class="badge off">ESITO NON COERENTE</span>';
+        const fin = document.createElement("div");
+        fin.style.marginTop = ".6rem";
+        fin.innerHTML = 'Totali ricalcolati: <code>' + JSON.stringify(totaliR) + '</code><br>' +
+                        'Totali pubblicati: <code>' + JSON.stringify(totaliP) + '</code><br>' + finale;
+        $("verifica").appendChild(fin);
+      }
+    }
+  </script>
+</body>
+</html>

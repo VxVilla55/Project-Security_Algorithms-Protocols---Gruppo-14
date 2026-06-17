@@ -1,0 +1,35 @@
+@startuml
+
+hide footbox
+title Fase di Scrutinio
+participant "Autorità\nElettorale (AE)" as AE #a0d7cc
+participant "Bacheca Pubblica\n(BP)" as BP #d8be94
+
+== Chiusura Urne e Pubblicazione Esito ==
+note over AE, BP: lo scrutinio inizia a urne chiuse\nSulla bacheca pubblica\nci sono i blocchi contenenti le singole triple (i, C_voto, C_k, IV, ricevuta)
+
+note right of AE: per ogni entry (i, C_voto, C_k, IV) con identificatore i:
+AE -> AE : k_AES_i = Dec_RSA-OAEP(sk_AE_enc, C_k)\nvoto_i = Dec_AES-CBC(k_AES, IV_i, C_voto)
+
+AE -> AE: compone la entry (i, voto, k, IV) per la tabella da pubblicare
+
+note right of AE: calcola l'esito dell'elezione
+AE -> AE: somma i voti per ciascuna opzione\ndella lista chiusa
+
+
+note right of AE: L'AE ha decifrato i voti e calcolato l'esito.\nFa un'ultima pubblicazione firmata:\n- Lista di tutti i voti decifrati (i, voto, k_AES)\n- Totali per opzione (Esito)
+AE -> BP: Pubblica risultati elezione (voti decifrati + esito)\n[Firmato con sk_AE_sig]
+
+BP -> BP: Aggiunge alla blockchain l'ultimo blocco dell'AE
+
+
+== Costruzione Merkle Tree (Delegata alla BP) ==
+
+AE -> BP: Richiesta di costruzione Merkle Tree
+note right of BP: La BP costruisce il Merkle Tree\nusando come foglie H(B || i) delle entry.\nCalcola la Merkle Root.
+
+BP -> BP: Aggiunge un blocco alla catena con la Merkle Root firmata
+
+
+
+@enduml

@@ -1,0 +1,57 @@
+@startuml
+
+hide footbox
+title Fase di Verifica
+
+participant "Elettore\n(E)" as E #e79088
+participant "Bacheca Pubblica\n(BP)" as BP #d8be94
+participant "Autorità\nElettorale (AE)" as AE #a0d7cc
+participant "Osservatore\n(O)" as O #c9c2dd
+
+group Verifica individuale (elettore)
+
+E -> BP: Richiesta di verifica (fornisce la propria Ricevuta/i)
+note right of BP: La BP genera la Merkle Proof\nper la ricevuta specifica.
+
+BP -> E: Restituisce array [MerkleProof, MerkleRootFirmata]
+
+note over E: L'elettore calcola autonomamente la Merkle Root\ne verifica se coincide con quella firmata dalla BP.
+    note right of E
+        Input locale (da Fase 3):
+        Identificativo 'i', Scheda 'B', Ricevuta 'R'
+    end note
+     
+    E -> AE: Cerca la entry corrispondente alla ricevuta 'R'
+    AE -> AE: genera la Merkle_proof \ncome prova di inclusione all'albero
+    AE --> E: entry (i, B, R), Merkle_proof, voto, k_AES, i
+    
+    E -> E: Ricalcola la radice
+    
+    E -> BP: Richiede la Merkle root pubblicata
+    BP --> E: restituisce la Merkle root
+
+    E -> E: verifica se le root coincidono
+    
+    note right of E
+        Controlli del client:
+        1) R è una firma valida dell'AE su H(B || i)?
+        2) La prova di inclusione Merkle fino alla radice è valida?
+        3) voto_i coincide con la preferenza 'i' espressa?
+        (opzionale: ridecifra C_voto con k_AES_i e IV_i per verifica)
+    end note
+end
+
+group Verifica universale (chiunque)
+    O -> BP: Scarica l'intero registro e l'esito finale dello scrutinio
+    BP --> O: Tutte le voci (i, B, R), tutti i (voto_i, k_AES_i), Radice di Merkle firmata, Totali dichiarati
+    
+    note left of O
+        Controlli dell'osservatore:
+        1) Autenticità: ogni R e la radice Merkle sono firmate dall'AE?
+        2) Integrità: ricalcola l'albero di Merkle dalle foglie H(B || i) e confronta la radice
+        3) Decifratura: ridecifra ogni C_voto_i con k_AES_i e IV_i e verifica che sia pari a voto_i
+        4) Conteggio: risomma i voto_i di ogni opzione e confronta con i totali pubblicati
+    end note
+end
+
+@enduml

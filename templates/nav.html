@@ -1,0 +1,23 @@
+<!-- Barra di navigazione con i controlli admin (inclusa in admin.html e utente.html) -->
+<nav class="topnav">
+  <a class="brand" href="/">E-Voto</a>
+  <a href="/admin">Dashboard</a>
+  <a href="/utente">Elettore</a>
+  <span class="spacer"></span>
+
+  <span class="ctrl">
+    <label for="navN">N utenti</label>
+    <input type="number" id="navN" value="5" min="1" max="200">
+    <button onclick="navAvvia()">Avvia</button>
+  </span>
+
+  <span class="ctrl">
+    <label for="navBatch">Batch</label>
+    <input type="number" id="navBatch" value="3" min="1">
+    <button class="verde" onclick="navSimula()">Simula</button>
+  </span>
+
+  <button class="rosso" onclick="navFerma()">Chiudi e avvia lo scrutinio</button>
+</nav>
+<div class="navstato" style="padding:.3rem 1rem;"><span id="navstato"></span></div>
+<div id="navmsg" class="navmsg"></div>

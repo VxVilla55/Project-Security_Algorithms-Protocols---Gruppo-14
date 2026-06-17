@@ -1,0 +1,36 @@
+@startuml
+
+hide footbox
+
+title Fase di Voto
+participant "Elettore\n(E)" as E #e79088
+participant "Autorità\nElettorale (AE)" as AE #a0d7cc
+participant "Bacheca Pubblica\n(BP)" as BP #d8be94
+
+E -> BP: richiede parametri elezione
+BP --> E: pk_AE_enc + lista opzioni
+
+note right of E: voto = indice dell'opzione scelta
+E -> E: genera (k_AES, IV) \nC_voto = Enc_AES-CBC(k_AES, IV, voto) \nC_k = Enc_RSA-OAEP(pk_AE_enc, k_AES) \nB = (C_voto, C_k, IV) \nσ_v = Sign_RSA-PSS(sk_v, B) 
+
+E -> AE: M = (B, (pk_v, σ_SA), σ_v)
+
+AE -> AE: Verifica: \nVrfy_RSA-PSS(pk_SA, σ_SA) == pk_v (credenziale valida) \nVrfy_RSA-PSS(pk_v, σ_v) == B (ballot)
+
+
+alt Credenziale valida AND non ancora spesa
+
+
+note right of AE: i = identificatore del blocco\nin cui pubblicare i dati del voto\n(i, C_voto, C_k, IV, R)
+AE -> AE: B = (C_voto, C_k, IV) \nR = Sign_RSA-PSS(sk_AE_sig, H(B||i)) 
+AE -> BP: pubblica voce (i, C_voto, C_k, IV, R)
+AE -> E: (identificativo i, ricevuta R)
+
+else [Else:] Credenziale non valida OR già spesa
+
+    AE --> E: Scheda rifiutata
+end
+
+note over AE: le schede che l'AE riceve restano cifrate fino alla chiusura delle urne
+
+@enduml

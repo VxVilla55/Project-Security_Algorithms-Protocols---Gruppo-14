@@ -1,0 +1,43 @@
+@startuml
+
+hide footbox
+
+title Flusso del sistema
+participant "Certification\nAuthority (CA)" as CA #d1d1d1
+participant "Elettore\n(E)" as E #e79088
+participant "Sistema di\nAutenticazione (SA)" as SA #9fbed3
+participant "Autorità\nElettorale (AE)" as AE #a0d7cc
+participant "Bacheca Pubblica\n(BP)" as BP #d8be94
+
+group Setup
+    CA -> SA: certifica SA
+    CA -> AE: certifica AE
+    CA -> BP: certifica BP
+    AE -> BP: pubblica parametri di voto
+end
+
+group Autenticazione
+    E -> SA: login
+    E -> SA: richiesta credenziale
+    SA -> E: credenziale di voto
+end
+
+group Voto
+    E -> BP: richiede parametri di voto
+    BP -> E: parametri di voto
+    E -> AE: scheda cifrata + credenziale
+    AE -> BP: pubblica scheda + ricevuta
+    AE -> E: ricevuta
+end
+
+group Scrutinio
+    AE -> AE: decifra e conta
+    AE -> BP: pubblica risultato
+end
+
+group Verifica
+    E -> BP: verifica inclusione del proprio voto
+    note over BP: la verifica universale è aperta a chiunque\n(ricalcolo indipendente dell'esito)
+end
+
+@enduml

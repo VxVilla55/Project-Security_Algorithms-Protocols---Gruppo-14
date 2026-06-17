@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Elettore — Spike E-Voto</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .steps { display:flex; flex-wrap:wrap; gap:1rem; margin-top:1rem; }
+    .step { background:#fff; border:1px solid var(--bordo); border-radius:12px; padding:1rem 1.2rem;
+            width:230px; box-shadow:0 2px 6px rgba(0,0,0,.05); }
+    .step .num { background:var(--verde); color:#fff; width:26px; height:26px; border-radius:50%;
+                 display:inline-flex; align-items:center; justify-content:center; font-weight:700; }
+    .step h3 { font-size:.95rem; margin:.5rem 0; }
+    .step button, .step select { width:100%; }
+    .step select { padding:.45rem; border:1px solid var(--bordo); border-radius:6px; margin-bottom:.5rem; }
+    .kv { font-size:.88rem; line-height:1.7; }
+    .kv b { color:#33414f; }
+    .vstep { border-left:4px solid var(--bordo); padding:.5rem .8rem; margin:.5rem 0;
+             background:#fff; border-radius:6px; }
+    .vstep.ok { border-left-color:var(--verde); }
+    .vstep.no { border-left-color:var(--rosso); }
+  </style>
+</head>
+<body>
+  {% include 'nav.html' %}
+
+  <div class="wrap">
+      <h1>Simulazione di un singolo elettore</h1>
+
+    <div class="panel">
+      <button class="verde" onclick="nuovo()">Nuovo elettore (login)</button>
+      <div class="kv" id="stato" style="margin-top:.6rem;"><span class="muted">Nessun elettore attivo.</span></div>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <span class="num">1</span><h3>Genera coppia di chiavi (pk_v, sk_v)</h3>
+        <button id="b1" onclick="chiavi()" disabled>Genera chiavi</button>
+      </div>
+      <div class="step">
+        <span class="num">2</span><h3>Richiedi credenziale a SA</h3>
+        <button id="b2" onclick="credenziale()" disabled>Richiedi σ_SA</button>
+      </div>
+      <div class="step">
+        <span class="num">3</span><h3>Prepara e cifra il voto</h3>
+        <select id="pref" disabled></select>
+        <button id="b3" onclick="prepara()" disabled>Cifra (C_voto, C_k, IV)</button>
+      </div>
+      <div class="step">
+        <span class="num">4</span><h3>Invia pacchetto M ad AE</h3>
+        <button id="b4" onclick="invia()" disabled>Invia e ricevi ricevuta</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Output dell'ultimo passo</h2>
+      <pre id="out">-
+      </pre>
+    </div>
+
+    <div class="panel">
+      <h2>Verifica individuale (passo per passo)</h2>
+      <p class="muted">Disponibile già durante l'elezione: confronta il blocco i sulla BP con ciò che hai inviato
+         e la ricevuta firmata. Dopo lo scrutinio si aggiungono i controlli su Merkle e voto in chiaro.</p>
+      <button id="bverif" class="blu" onclick="avviaVerifica()" disabled>Avvia verifica</button>
+      <button id="bnext" onclick="passoSuccessivo()" disabled>Passo successivo ▶</button>
+      <div id="verifica" style="margin-top:.8rem;"></div>
+    </div>
+  </div>
+
+  <script src="/static/common.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let opzioni = [];
+    let passiVerifica = [];   // passi restituiti dal server
+    let passoCorrente = 0;    // quanti ne ho già mostrati
+    let votoPubblicato = null, tuttoOk = null, faseVerifica = null;
+
+    function show(obj) { $("out").textContent = JSON.stringify(obj, null, 2); }
+
+    function mostraStato(s) {
+      $("stato").innerHTML =
+        '<b>Matricola:</b> ' + s.matricola + ' &nbsp; <b>Token:</b> ' + (s.token||"-") + '<br>' +
+        '<b>Chiavi:</b> ' + (s.ha_chiavi?"Sì":"No") + ' &nbsp; <b>Credenziale:</b> ' + (s.ha_credenziale?"Sì":"No") + ' ' +
+        '&nbsp; <b>Preferenza:</b> ' + (s.preferenza ?? "-") + ' &nbsp; ' +
+        '<b>Votato:</b> ' + (s.ha_votato?("Sì (i="+s.identificativo+")"):"No");
+    }
+    function abilita(b1,b2,b3,b4) {
+      $("b1").disabled=!b1; $("b2").disabled=!b2;
+      $("pref").disabled=!b3; $("b3").disabled=!b3; $("b4").disabled=!b4;
+    }
+
+    async function nuovo() {
+      const d = await post("/api/utente/nuovo", {});
+      if (d.errore) { show(d); return; }
+      opzioni = d.opzioni;
+      $("pref").innerHTML = opzioni.map((o,i)=> '<option value="' + i + '">' + i + ' - ' + o + '</option>').join("");
+      mostraStato(d.stato); abilita(true,false,false,false);
+      resetVerifica();
+      $("bverif").disabled = true;   // il nuovo elettore non ha ancora votato
+      show({messaggio:"Elettore creato e autenticato (login OIDC mockato).", stato:d.stato});
+    }
+    async function chiavi() {
+      const d = await post("/api/utente/chiavi", {});
+      if (d.errore) { show(d); return; }
+      mostraStato(d.stato); abilita(true,true,false,false); show(d);
+    }
+    async function credenziale() {
+      const d = await post("/api/utente/credenziale", {});
+      if (d.errore) { show(d); return; }
+      mostraStato(d.stato); abilita(true,true,true,false); show(d);
+    }
+    async function prepara() {
+      const preferenza = parseInt($("pref").value);
+      const d = await post("/api/utente/prepara", {preferenza});
+      if (d.errore) { show(d); return; }
+      mostraStato(d.stato); abilita(true,true,true,true); show(d);
+    }
+    async function invia() {
+      const d = await post("/api/utente/invia", {});
+      if (d.errore) { show(d); return; }
+      mostraStato(d.stato); abilita(true,true,true,false); show(d);
+      $("bverif").disabled = false;   // da ora la verifica individuale è possibile
+    }
+
+    // ---- Verifica individuale a step ----
+    function resetVerifica() {
+      passiVerifica = []; passoCorrente = 0; votoPubblicato = null; tuttoOk = null;
+      $("verifica").innerHTML = "";
+      $("bnext").disabled = true;
+    }
+    async function avviaVerifica() {
+      const d = await post("/api/utente/verifica", {});
+      if (d.errore) { $("verifica").innerHTML = '<span class="badge off">' + escapeHtml(d.errore) + '</span>'; return; }
+      passiVerifica = d.esito.passi;
+      votoPubblicato = d.esito.voto_pubblicato;
+      tuttoOk = d.esito.tutto_ok;
+      faseVerifica = d.esito.fase;   // "in_corso" (urna aperta) oppure "scrutinio"
+      passoCorrente = 0;
+      $("verifica").innerHTML = '<p class="muted">Premi “Passo successivo” per vedere i ' + passiVerifica.length + ' controlli uno alla volta.</p>';
+      $("bnext").disabled = false;
+    }
+    function passoSuccessivo() {
+      if (passoCorrente >= passiVerifica.length) return;
+      const p = passiVerifica[passoCorrente];
+      const cls = p.esito ? "ok" : "no";
+      const badge = p.esito ? '<span class="badge on">OK</span>' : '<span class="badge off">NO</span>';
+      const div = document.createElement("div");
+      div.className = "vstep " + cls;
+      div.innerHTML = '<b>' + p.titolo + '</b> ' + badge + '<br><span class="muted">' + p.dettaglio + '</span>';
+      $("verifica").appendChild(div);
+      passoCorrente++;
+
+      if (passoCorrente >= passiVerifica.length) {
+        $("bnext").disabled = true;
+        const fin = document.createElement("div");
+        fin.style.marginTop = ".6rem";
+        if (faseVerifica === "scrutinio") {
+          // scrutinio avvenuto: il voto in chiaro è pubblicato e confrontabile
+          const finale = tuttoOk
+            ? '<span class="badge on">VERIFICA SUPERATA</span>'
+            : '<span class="badge off">VERIFICA FALLITA</span>';
+          fin.innerHTML = '<b>Voto pubblicato:</b> ' + votoPubblicato + ' &nbsp; ' + finale;
+        } else {
+          // urna ancora aperta: il voto resta cifrato, niente "voto pubblicato"
+          const finale = tuttoOk
+            ? '<span class="badge on">INVIO VERIFICATO</span>'
+            : '<span class="badge off">VERIFICA FALLITA</span>';
+          fin.innerHTML = finale +
+            '<br><span class="muted">Il voto resta cifrato fino allo scrutinio: ' +
+            'i controlli su albero di Merkle e voto in chiaro compariranno a urna chiusa.</span>';
+        }
+        $("verifica").appendChild(fin);
+      }
+    }
+
+    // il pulsante di verifica è gestito da nuovo()/invia(): qui non lo tocchiamo,
+    // così resta abilitato anche durante l'elezione una volta votato.
+    window.dopoAzione = function (s) {};
+  </script>
+</body>
+</html>

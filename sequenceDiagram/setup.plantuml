@@ -1,0 +1,29 @@
+@startuml
+
+hide footbox
+
+title Fase di Setup
+participant "Certification\nAuthority (CA)" as CA #d1d1d1
+participant "Sistema di\nAutenticazione (SA)" as SA #9fbed3
+participant "Autorità\nElettorale (AE)" as AE #a0d7cc
+participant "Bacheca Pubblica\n(BP)" as BP #d8be94
+
+note over SA, BP: ogni autorità genera localmente la propria coppia di chiavi
+SA -> SA: genera (pk_SA, sk_SA)
+AE -> AE: genera (pk_AE_enc, sk_AE_enc)
+AE -> AE: genera (pk_AE_sig, sk_AE_sig)
+BP -> BP: genera (pk_BP, sk_BP)
+
+SA -> CA: pk_SA
+AE -> CA: pk_AE_enc, pk_AE_sig
+BP -> CA: pk_BP
+
+note over SA: La CA firma ciascuna chiave pubblica con sk_CA
+CA -> SA: Cert_SA
+CA -> AE: Cert_AE_enc, Cert_AE_sig
+CA -> BP: Cert_BP
+
+note right of AE: firma parametri con sk_AE_sig\n(pk_AE_enc + lista chiusa delle opzioni)
+AE -> BP: pubblica parametri firmati
+
+@enduml

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Spike E-Voto</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  {% include 'nav.html' %}
+
+  <div class="wrap">
+    <h1>Dashboard dei nodi</h1>
+    <p class="muted">Vista in sola lettura dello stato di IdP, SA, AE e Bacheca Pubblica.
+       I controlli (Avvia / Simula / Ferma) sono nella barra in alto.</p>
+
+    <!-- Esito scrutinio + blockchain -->
+    <div class="row">
+      <div class="col panel">
+        <h2>Esito scrutinio</h2>
+        <div id="esito"><span class="muted">Nessuno scrutinio ancora eseguito.</span></div>
+      </div>
+      <div class="col panel">
+        <h2>Bacheca Pubblica (blockchain)</h2>
+        <div id="bpinfo" class="muted"></div>
+        <div id="blockchain"><span class="muted">-</span></div>
+        <div id="bloccoDettaglio" style="margin-top:.6rem;"></div>
+      </div>
+    </div>
+
+    <!-- Tabelle dei nodi -->
+    <div class="row">
+      <div class="col panel">
+        <h2>IdP <span class="muted">(utente, password, token)</span></h2>
+        <div id="t_idp"><span class="muted">-</span></div>
+      </div>
+      <div class="col panel">
+        <h2>SA <span class="muted">(token, pk_v firmata)</span></h2>
+        <div id="t_sa"><span class="muted">-</span></div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col panel">
+        <h2>AE · Voti ricevuti <span class="muted">(i, C_voto, C_k, IV)</span></h2>
+        <div id="t_voti"><span class="muted">-</span></div>
+      </div>
+      <div class="col panel">
+        <h2>AE · Scrutinio <span class="muted">(i, voto, k_AES)</span></h2>
+        <div id="t_scrut"><span class="muted">-</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/common.js"></script>
+  <script>
+    // tabella della blockchain con un pulsante "Vedi" per ispezionare ogni blocco
+    function tabellaBlocchi(blocchi) {
+      if (!blocchi || !blocchi.length) return '<span class="muted">vuota</span>';
+      let h = '<table><tr><th>index</th><th>tipo</th><th>n_tx</th><th>hash</th><th></th></tr>';
+      for (const b of blocchi)
+        h += '<tr><td>' + b.index + '</td><td>' + b.tipo + '</td><td>' + b.n_tx + '</td><td>' + b.hash + '</td>' +
+             '<td><button onclick="mostraBlocco(' + b.index + ')">Vedi</button></td></tr>';
+      return h + '</table>';
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    // scarica e mostra il contenuto completo di un blocco
+    async function mostraBlocco(i) {
+      const d = await (await fetch("/api/blocco/" + i)).json();
+      const box = document.getElementById("bloccoDettaglio");
+      if (d.errore) { box.innerHTML = '<span class="badge off">' + escapeHtml(d.errore) + '</span>'; return; }
+      const b = d.blocco;
+      let txt = 'Blocco #' + b.index + '  ·  tipo: ' + b.tipo + '\nhash: ' + b.hash + '\nprecedente: ' + b.prev + '\n';
+      b.transazioni.forEach((t, k) => {
+        let pretty;
+        try { pretty = JSON.stringify(JSON.parse(t), null, 2); }
+        catch (e) { pretty = t; }   // es. il blocco genesis non è JSON
+        txt += '\n- transazione ' + k + ' -\n' + pretty + '\n';
+      });
+      box.innerHTML = '<h3 style="margin:.6rem 0 .3rem">Contenuto del blocco #' + b.index + '</h3>' +
+                      '<pre>' + escapeHtml(txt) + '</pre>';
+    }
+
+    // ridisegna la dashboard ad ogni aggiornamento di stato
+    window.dopoAzione = function (s) {
+      if (!s.avviata) return;
+      document.getElementById("t_idp").innerHTML   = tabella(s.tabella_idp, ["utente","password","token"]);
+      document.getElementById("t_sa").innerHTML    = tabella(s.tabella_sa, ["utente","token","pk_v","sigma_SA"]);
+      document.getElementById("t_voti").innerHTML  = tabella(s.tabella_voti, ["i","c_voto","c_k","iv"]);
+      document.getElementById("t_scrut").innerHTML = tabella(s.tabella_scrutinio, ["i","voto","k_AES"]);
+      document.getElementById("blockchain").innerHTML = tabellaBlocchi(s.blockchain);
+
+      const integ = s.bp_integra
+        ? '<span class="badge on">integra</span>' : '<span class="badge off">compromessa</span>';
+      document.getElementById("bpinfo").innerHTML = s.bp_voci + ' voci · integrità ' + integ;
+
+      if (s.risultato && s.risultato.totali) {
+        const t = s.risultato.totali;
+        let h = '<table><tr><th>Opzione</th><th>Voti</th></tr>';
+        for (const k in t) h += '<tr><td>' + k + '</td><td><b>' + t[k] + '</b></td></tr>';
+        h += '</table><p class="muted">Radice di Merkle: <code>' + (s.risultato.merkle_root || '-') + '</code></p>';
+        document.getElementById("esito").innerHTML = h;
+      }
+    };
+  </script>
+</body>
+</html>
